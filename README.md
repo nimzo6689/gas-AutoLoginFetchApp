@@ -1,6 +1,6 @@
 # AutoLoginFetchApp
 
-UrlFetchApp with auto-login functionality for Google Apps Script.
+UrlFetchApp with auto-login functionality for Google Apps Script.  
 It is useful for scraping websites that require login and for automated operation of websites.
 
 ## How to use
@@ -28,7 +28,7 @@ function main() {
 
 ### For local development with TypeScript
 
-I recommend using Git's submodule to include it in your project.
+I recommend using Git's submodule to include it in your project.  
 It is also easier if you use this project itself as a template.
 
 ```bash
@@ -47,7 +47,7 @@ git submodule add -b main $REPO_URL/src/client/common src/client/common
 
 ### Re-use Cookies
 
-The retrieved cookies are stored by default in the UserCache of the CacheService for 6 hours.
+The retrieved cookies are stored by default in the UserCache of the CacheService for 6 hours.  
 Therefore, within that time, the communication required for login is skipped.
 
 ### Retry communication
@@ -56,7 +56,7 @@ If communication fails, it is retried up to 5 times by default.
 
 ### Sleep time
 
-Wait 5 seconds by default from the last request to avoid making a request.
+Wait 5 seconds by default from the last request to avoid making a request.  
 This is a measure to avoid overloading the target site with scraping.
 
 ## Caution
