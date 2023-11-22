@@ -1,0 +1,7 @@
+{
+  "editor.formatOnSave": true,
+  "prettier.printWidth": 120,
+  "files.exclude": {
+    "node_modules": true
+  }
+}
