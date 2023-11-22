@@ -4,7 +4,7 @@ dist/*
 *.tgz
 
 .clasp*.json
-!clasp-example.json
+!.clasp-example.json
 
 .vscode/*
 !.vscode/settings.json
