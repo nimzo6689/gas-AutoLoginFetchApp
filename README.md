@@ -14,15 +14,13 @@ Also if you might want to use Cheerio, you can try [cheeriogs](https://github.co
 ```javascript
 function main() {
   const client = new AutoLoginFetchApp.AutoLoginFetchApp('https://localhost/login.html', {
-    accountKey: 'username',
-    accountValue: 'test_username',
-    passwordKey: 'password',
-    passwordValue: 'test_password',
+    username: 'test_username',
+    password: 'test_password',
   });
   const response = client.fetch('https://localhost/path/to/target-page.html');
   const $ = Cheerio.load(response.getContentText());
 
-  console.log(/Logout/.test($('html').text());
+  console.log(/Logout/.test($('html').text() ? 'Logged in successful.' : 'Failed to log in.');
 }
 ```
 

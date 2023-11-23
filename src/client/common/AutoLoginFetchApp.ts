@@ -18,14 +18,9 @@ import * as cheerio from 'cheerio';
 type URLFetchRequestOptions = GoogleAppsScript.URL_Fetch.URLFetchRequestOptions;
 type HTTPResponse = GoogleAppsScript.URL_Fetch.HTTPResponse;
 
-const Cache = CacheService.getUserCache();
+type FormParameters = { [key: string]: string | number | boolean };
 
-export interface AuthOption {
-  accountKey: string;
-  accountValue: string;
-  passwordKey: string;
-  passwordValue: string;
-}
+const Cache = CacheService.getUserCache();
 
 export default class AutoLoginFetchApp {
   private static readonly SESSION_KEY = '##__COOKIES__##';
@@ -36,12 +31,12 @@ export default class AutoLoginFetchApp {
   private lastRequestTime: number;
 
   private loginUrl: string;
-  private authOption: AuthOption;
+  private authOptions: FormParameters;
   private cookies: string;
 
-  constructor(loginUrl: string, authOption: AuthOption) {
+  constructor(loginUrl: string, authOptions: FormParameters) {
     this.loginUrl = loginUrl;
-    this.authOption = authOption;
+    this.authOptions = authOptions;
 
     this.cookies = Cache.get(AutoLoginFetchApp.SESSION_KEY) || AutoLoginFetchApp.COOKIES_NEED_TO_RETRIEVE;
 
@@ -90,15 +85,11 @@ export default class AutoLoginFetchApp {
 
   private retrieveCookies() {
     const loginPage = this.fetch(this.loginUrl, undefined, false);
-    const loginFormParams = AutoLoginFetchApp.parseLoginForm(loginPage.getContentText());
-
-    const authParams: { [key: string]: string } = {};
-    authParams[this.authOption.accountKey] = this.authOption.accountValue;
-    authParams[this.authOption.passwordKey] = this.authOption.passwordValue;
+    const loginFormOptions = AutoLoginFetchApp.parseLoginForm(loginPage.getContentText());
 
     const req: URLFetchRequestOptions = {
       method: 'post',
-      payload: { ...loginFormParams, ...authParams },
+      payload: { ...loginFormOptions, ...this.authOptions },
       followRedirects: false,
     };
 
@@ -117,7 +108,7 @@ export default class AutoLoginFetchApp {
     return false;
   }
 
-  private static parseLoginForm(htmlContent: string): { [key: string]: string } {
+  private static parseLoginForm(htmlContent: string): FormParameters {
     const $ = cheerio.load(htmlContent);
 
     const formData: { [key: string]: string } = {};
