@@ -17,4 +17,5 @@
  */
 import AutoLoginFetchApp from './client/common/AutoLoginFetchApp';
 
+// To prevent tree shaking for accessibility in Google Apps Script.
 AutoLoginFetchApp;

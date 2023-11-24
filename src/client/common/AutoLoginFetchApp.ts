@@ -24,16 +24,16 @@ interface CustomOptions {
   /**
    * If communication fails, it is retried up to 5 times by default.
    */
-  maxRetryCount?: number;
+  maxRetryCount: number;
   /**
    * The retrieved cookies are stored by default in the UserCache of the CacheService for 6 hours.
    */
-  cacheExpiration?: number;
+  cacheExpiration: number;
   /**
    * Wait 5 seconds by default from the last request to avoid making a request.
    * This is a measure to avoid overloading the target site with scraping.
    */
-  leastIntervalMills?: number;
+  leastIntervalMills: number;
 }
 
 const Cache = CacheService.getUserCache();
@@ -50,7 +50,7 @@ export default class AutoLoginFetchApp {
   private cookies: string | null;
   private lastRequestTime: number;
 
-  constructor(loginUrl: string, authOptions: FormParameters, customOptions: Partial<CustomOptions>) {
+  constructor(loginUrl: string, authOptions: FormParameters, customOptions?: Partial<CustomOptions>) {
     this.loginUrl = loginUrl;
     this.authOptions = authOptions;
     if (customOptions) {

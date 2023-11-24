@@ -20,7 +20,7 @@ function main() {
   const response = client.fetch('https://localhost/path/to/target-page.html');
   const $ = Cheerio.load(response.getContentText());
 
-  console.log(/Logout/.test($('html').text() ? 'Logged in successful.' : 'Failed to log in.');
+  console.log(/Logout/.test($('html').text() ? 'Logged in successful.' : 'Failed to log in.'));
 }
 ```
 
