@@ -20,45 +20,53 @@ type HTTPResponse = GoogleAppsScript.URL_Fetch.HTTPResponse;
 
 type FormParameters = { [key: string]: string | number | boolean };
 
+interface CustomOptions {
+  /**
+   * If communication fails, it is retried up to 5 times by default.
+   */
+  maxRetryCount?: number;
+  /**
+   * The retrieved cookies are stored by default in the UserCache of the CacheService for 6 hours.
+   */
+  cacheExpiration?: number;
+  /**
+   * Wait 5 seconds by default from the last request to avoid making a request.
+   * This is a measure to avoid overloading the target site with scraping.
+   */
+  leastIntervalMills?: number;
+}
+
 const Cache = CacheService.getUserCache();
 
 export default class AutoLoginFetchApp {
-  private static readonly SESSION_KEY = '##__COOKIES__##';
-  private static readonly COOKIES_NEED_TO_RETRIEVE = '##__NEED_TO_RETRIEVE__##';
+  private static readonly COOKIES_KEY = '##__COOKIES__##';
   private readonly maxRetryCount: number = 5;
-
-  private leastIntervalSec: number;
-  private lastRequestTime: number;
+  private readonly cacheExpiration: number = 21600;
+  private readonly leastIntervalMills: number = 5000;
 
   private loginUrl: string;
   private authOptions: FormParameters;
-  private cookies: string;
 
-  constructor(loginUrl: string, authOptions: FormParameters) {
+  private cookies: string | null;
+  private lastRequestTime: number;
+
+  constructor(loginUrl: string, authOptions: FormParameters, customOptions: Partial<CustomOptions>) {
     this.loginUrl = loginUrl;
     this.authOptions = authOptions;
-
-    this.cookies = Cache.get(AutoLoginFetchApp.SESSION_KEY) || AutoLoginFetchApp.COOKIES_NEED_TO_RETRIEVE;
-
-    this.leastIntervalSec = 5;
-    this.lastRequestTime = new Date().getTime() - this.leastIntervalSec;
-  }
-
-  public fetch(url: string, params?: URLFetchRequestOptions, useCache: boolean = true): HTTPResponse {
-    const interval = new Date().getTime() - this.lastRequestTime;
-    if (interval < this.leastIntervalSec) {
-      Utilities.sleep(1000 * this.leastIntervalSec - interval);
+    if (customOptions) {
+      Object.assign(this, customOptions);
     }
 
-    if (useCache && this.cookies === AutoLoginFetchApp.COOKIES_NEED_TO_RETRIEVE) {
+    this.cookies = Cache.get(AutoLoginFetchApp.COOKIES_KEY);
+    this.lastRequestTime = new Date().getTime() - this.leastIntervalMills;
+  }
+
+  public fetch(url: string, params: URLFetchRequestOptions = {}, useCache: boolean = true): HTTPResponse {
+    if (useCache && this.cookies) {
       this.retrieveCookies();
     }
 
-    if (!params) {
-      params = {};
-    }
-
-    if (useCache) {
+    if (this.cookies) {
       params.headers = params.headers || {};
       params.headers['Cookie'] = this.cookies;
     }
@@ -66,6 +74,7 @@ export default class AutoLoginFetchApp {
     for (let i = 1; i <= this.maxRetryCount; i++) {
       try {
         console.log(`url: ${url}, params: ${JSON.stringify(params)}`);
+        this.sleepIfNeeded();
         const response = UrlFetchApp.fetch(url, params);
         this.lastRequestTime = new Date().getTime();
         this.saveCookies(response.getAllHeaders());
@@ -74,13 +83,21 @@ export default class AutoLoginFetchApp {
         if (err !== null && typeof err === 'object' && 'getResponseCode' in err) {
           const httpResponse = err as GoogleAppsScript.URL_Fetch.HTTPResponse;
           console.warn(`Tried ${i} times. Reponse Status Code: ${httpResponse.getResponseCode()}.`);
-          Utilities.sleep(1000 * 2 ** i + this.leastIntervalSec);
+          Utilities.sleep(1000 * 2 ** i);
           continue;
         }
         console.error(err);
       }
     }
     throw new Error('Occurred an unexpected error.');
+  }
+
+  // This is a measure to avoid overloading the target site with scraping.
+  private sleepIfNeeded() {
+    const interval = new Date().getTime() - this.lastRequestTime;
+    if (interval < this.leastIntervalMills) {
+      Utilities.sleep(this.leastIntervalMills - interval);
+    }
   }
 
   private retrieveCookies() {
@@ -90,6 +107,7 @@ export default class AutoLoginFetchApp {
     const req: URLFetchRequestOptions = {
       method: 'post',
       payload: { ...loginFormOptions, ...this.authOptions },
+      // Logging in often results in an HTTP 302 redirect, which can cause unnecessary redirection.
       followRedirects: false,
     };
 
@@ -102,7 +120,7 @@ export default class AutoLoginFetchApp {
   private saveCookies(headers: { 'Set-Cookie'?: string }): boolean {
     if (headers['Set-Cookie']) {
       this.cookies = Array.isArray(headers['Set-Cookie']) ? headers['Set-Cookie'].join(';') : headers['Set-Cookie'];
-      Cache.put(AutoLoginFetchApp.SESSION_KEY, this.cookies, 21600);
+      Cache.put(AutoLoginFetchApp.COOKIES_KEY, this.cookies, this.cacheExpiration);
       return true;
     }
     return false;
@@ -111,7 +129,9 @@ export default class AutoLoginFetchApp {
   private static parseLoginForm(htmlContent: string): FormParameters {
     const $ = cheerio.load(htmlContent);
 
-    const formData: { [key: string]: string } = {};
+    const buttonCount = $('form input button[type="submit" | "button"]').length;
+
+    const formData: FormParameters = {};
     $('form input').each((_, element) => {
       const name = $(element).attr('name');
       if (!name) {
@@ -120,7 +140,8 @@ export default class AutoLoginFetchApp {
       const value = $(element).val();
       const type = $(element).attr('type');
 
-      if (type === 'submit' && !name.toLowerCase().includes('login')) {
+      // Skip if there are multiple buttons and the name attribute does not include "login".
+      if ((type === 'submit' || type === 'button') && buttonCount !== 1 && !name.toLowerCase().includes('login')) {
         return;
       }
 
