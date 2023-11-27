@@ -37,6 +37,8 @@ REPO_URL=https://github.com/nimzo6689/gas-AutoLoginFetchApp.git
 
 git clone --depth=1 --no-commit-history $REPO_URL
 
+npm install
+
 rm -rf src/client/common
 git submodule add -b main $REPO_URL/src/client/common src/client/common
 ```
