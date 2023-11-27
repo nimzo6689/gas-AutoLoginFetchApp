@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* split-bundle.mjs split-bundle-file */
+/* split-bundle.mjs @gas-AutoLoginFetchApp/entry-point */
 /**
  * Copyright 2023 nimzo6689
  *
