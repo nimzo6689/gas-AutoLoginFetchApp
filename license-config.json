@@ -6,6 +6,7 @@
     ".gitignore",
     ".prettierignore",
     "*.txt",
+    "*.md",
     ".github",
     "CONTRIBUTING",
     "dist"
