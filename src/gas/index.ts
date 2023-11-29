@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* split-bundle.mjs @gas-AutoLoginFetchApp/entry-point */
 /**
  * Copyright 2023 nimzo6689
  *
@@ -15,4 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-export { default, CustomOptions } from './client/common/AutoLoginFetchApp';
+import AutoLoginFetchApp from '../client/common/AutoLoginFetchApp';
+
+// For accessibility in Google Apps Script.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).AutoLoginFetchApp = AutoLoginFetchApp;

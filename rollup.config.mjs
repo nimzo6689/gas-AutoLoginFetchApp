@@ -22,14 +22,13 @@ import commonjs from '@rollup/plugin-commonjs';
 import { fileURLToPath } from 'url';
 
 export default {
-  input: ['src/index.ts'],
+  input: ['src/gas/index.ts'],
   output: {
-    dir: 'dist',
-    format: 'esm',
+    file: 'dist/bundle.js',
+    format: 'iife',
   },
   plugins: [
     cleanup({
-      comments: /(^!|split-bundle.mjs)/,
       extensions: ['.ts'],
     }),
     license({

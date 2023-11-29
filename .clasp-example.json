@@ -1,5 +1,4 @@
 {
   "scriptId": "## Write your script Id ##",
-  "rootDir": "./dist",
-  "filePushOrder": ["dist/bundle.js", "dist/main.js"]
+  "rootDir": "./dist"
 }
