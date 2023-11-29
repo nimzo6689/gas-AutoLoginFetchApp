@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 import * as cheerio from 'cheerio';
+import * as cookie from 'cookie';
 
 type URLFetchRequestOptions = GoogleAppsScript.URL_Fetch.URLFetchRequestOptions;
 type HTTPResponse = GoogleAppsScript.URL_Fetch.HTTPResponse;
 
 type FormParameters = { [key: string]: string | number | boolean };
 
-interface CustomOptions {
+export interface CustomOptions {
   /**
    * If communication fails, it is retried up to 5 times by default.
    */
@@ -34,20 +35,37 @@ interface CustomOptions {
    * This is a measure to avoid overloading the target site with scraping.
    */
   leastIntervalMills: number;
+  /**
+   * Reuses cached cookies even if it has been expired.
+   * When there are expired cookies, the default setting is `false` to trigger the login process.
+   */
+  reusesExpiredCookies: boolean;
+  /**
+   * Stores expired cookies.
+   * When `true` is set, `reusesExpiredCookies` is automatically forced to `true`.
+   * It is normally set to `false` to replicate the behavior of a standard browser.
+   */
+  storesExpiredCookies: boolean;
 }
 
+// We need to retain cookies for a combination of the user executing the Apps Script
+// and the target site being logged in, so we will use UserCache.
+// Never use ScriptCache and DocumentCache as they could potentially be exploited for session hijacking.
 const Cache = CacheService.getUserCache();
 
 export default class AutoLoginFetchApp {
-  private static readonly COOKIES_KEY = '##__COOKIES__##';
+  private readonly loginUrl: string;
+  private readonly authOptions: FormParameters;
+
+  // For customOptions
   private readonly maxRetryCount: number = 5;
   private readonly cacheExpiration: number = 21600;
   private readonly leastIntervalMills: number = 5000;
+  private readonly reusesExpiredCookies: boolean = false;
+  private readonly storesExpiredCookies: boolean = false;
 
-  private loginUrl: string;
-  private authOptions: FormParameters;
-
-  private cookies: string | null;
+  private readonly cookiesKey: string;
+  private cookies?: { Expires?: string }[];
   private lastRequestTime: number;
 
   constructor(loginUrl: string, authOptions: FormParameters, customOptions?: Partial<CustomOptions>) {
@@ -55,20 +73,51 @@ export default class AutoLoginFetchApp {
     this.authOptions = authOptions;
     if (customOptions) {
       Object.assign(this, customOptions);
+      this.reusesExpiredCookies ||= this.storesExpiredCookies;
     }
 
-    this.cookies = Cache.get(AutoLoginFetchApp.COOKIES_KEY);
+    // For CacheService, the maximum length of a key is 250 characters.
+    this.cookiesKey = `AutoLoginFetchApp.${loginUrl}`.substring(0, 250);
+    const cachedCookies = Cache.get(this.cookiesKey);
+    if (cachedCookies && !this.reusesExpiredCookies) {
+      this.cookies = JSON.parse(cachedCookies);
+      const hasExpiredCookie = this.cookies?.some(it =>
+        Object.entries(it).some(([key, value]) => key === 'Expires' && new Date(value) < new Date())
+      );
+      if (hasExpiredCookie) {
+        // To retrive cookies when fetch() is called.
+        this.cookies = undefined;
+      }
+    }
+    // To skip the sleep process before sending the initial request.
     this.lastRequestTime = new Date().getTime() - this.leastIntervalMills;
   }
 
+  public get customOptions(): CustomOptions {
+    return Object.assign(
+      {},
+      this.maxRetryCount,
+      this.cacheExpiration,
+      this.leastIntervalMills,
+      this.reusesExpiredCookies,
+      this.storesExpiredCookies
+    );
+  }
+
+  public clearCachedCookies() {
+    Cache.remove(this.cookiesKey);
+  }
+
   public fetch(url: string, params: URLFetchRequestOptions = {}, useCache: boolean = true): HTTPResponse {
-    if (useCache && this.cookies) {
+    if (useCache && !this.cookies) {
       this.retrieveCookies();
     }
 
     if (this.cookies) {
       params.headers = params.headers || {};
-      params.headers['Cookie'] = this.cookies;
+      params.headers['Cookie'] = this.cookies
+        .flatMap(it => Object.entries(it).map(([key, value]) => cookie.serialize(key, value)))
+        .join('; ');
     }
 
     for (let i = 1; i <= this.maxRetryCount; i++) {
@@ -76,6 +125,7 @@ export default class AutoLoginFetchApp {
         console.log(`url: ${url}, params: ${JSON.stringify(params)}`);
         this.sleepIfNeeded();
         const response = UrlFetchApp.fetch(url, params);
+        console.log(`status: ${response.getResponseCode()}, headers: ${JSON.stringify(response.getAllHeaders())}`);
         this.lastRequestTime = new Date().getTime();
         this.saveCookies(response.getAllHeaders());
         return response;
@@ -119,8 +169,15 @@ export default class AutoLoginFetchApp {
 
   private saveCookies(headers: { 'Set-Cookie'?: string }): boolean {
     if (headers['Set-Cookie']) {
-      this.cookies = Array.isArray(headers['Set-Cookie']) ? headers['Set-Cookie'].join(';') : headers['Set-Cookie'];
-      Cache.put(AutoLoginFetchApp.COOKIES_KEY, this.cookies, this.cacheExpiration);
+      const respCookies: string[] = Array.isArray(headers['Set-Cookie'])
+        ? headers['Set-Cookie']
+        : [headers['Set-Cookie']];
+      this.cookies = respCookies.map(it => cookie.parse(it));
+      if (!this.storesExpiredCookies) {
+        // Remove expired cookies.
+        this.cookies = this.cookies.filter(it => !(it.Expires && new Date(it.Expires) < new Date()));
+      }
+      Cache.put(this.cookiesKey, JSON.stringify(this.cookies), this.cacheExpiration);
       return true;
     }
     return false;
@@ -129,7 +186,8 @@ export default class AutoLoginFetchApp {
   private static parseLoginForm(htmlContent: string): FormParameters {
     const $ = cheerio.load(htmlContent);
 
-    const buttonCount = $('form input button[type="submit" | "button"]').length;
+    const submitCount = $('form input button[type="submit"]').length;
+    const buttonCount = $('form input button[type="button"]').length;
 
     const formData: FormParameters = {};
     $('form input').each((_, element) => {
@@ -141,7 +199,11 @@ export default class AutoLoginFetchApp {
       const type = $(element).attr('type');
 
       // Skip if there are multiple buttons and the name attribute does not include "login".
-      if ((type === 'submit' || type === 'button') && buttonCount !== 1 && !name.toLowerCase().includes('login')) {
+      if (
+        (type === 'submit' || type === 'button') &&
+        submitCount + buttonCount !== 1 &&
+        !name.toLowerCase().includes('login')
+      ) {
         return;
       }
 
