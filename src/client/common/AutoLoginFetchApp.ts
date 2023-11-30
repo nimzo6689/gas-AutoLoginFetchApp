@@ -27,14 +27,14 @@ export interface CustomOptions {
    */
   maxRetryCount: number;
   /**
-   * The retrieved cookies are stored by default in the UserCache of the CacheService for 6 hours.
-   */
-  cacheExpiration: number;
-  /**
    * Wait 5 seconds by default from the last request to avoid making a request.
    * This is a measure to avoid overloading the target site with scraping.
    */
   leastIntervalMills: number;
+  /**
+   * The retrieved cookies are stored by default in the UserCache of the CacheService for 6 hours.
+   */
+  cacheExpiration: number;
   /**
    * Reuses cached cookies even if it has been expired.
    * When there are expired cookies, the default setting is `false` to trigger the login process.
@@ -46,6 +46,24 @@ export interface CustomOptions {
    * It is normally set to `false` to replicate the behavior of a standard browser.
    */
   storesExpiredCookies: boolean;
+  /**
+   * Specify the CSS selector for input elements that have parameters that are sent with the login request.
+   * (default: 'form input')
+   */
+  loginFormInput: string;
+  /**
+   * Overwrites the default values of requestOptions.
+   * The settings specified here can be further overwritten when calling the fetch method.
+   */
+  requestOptions: URLFetchRequestOptions;
+  /**
+   * Specify the logging function, such as `console.log`.
+   * The request, response and logs in the event of an error will be output.
+   *
+   * @param message
+   * @returns
+   */
+  logger: (message: string) => void;
 }
 
 // We need to retain cookies for a combination of the user executing the Apps Script
@@ -63,6 +81,9 @@ export default class AutoLoginFetchApp {
   private readonly leastIntervalMills: number = 5000;
   private readonly reusesExpiredCookies: boolean = false;
   private readonly storesExpiredCookies: boolean = false;
+  private readonly loginFormInput: string = 'form input';
+  private readonly requestOptions: URLFetchRequestOptions = {};
+  private readonly logger?: (message: string) => void;
 
   private readonly cookiesKey: string;
   private cookies?: { Expires?: string }[];
@@ -71,6 +92,7 @@ export default class AutoLoginFetchApp {
   constructor(loginUrl: string, authOptions: FormParameters, customOptions?: Partial<CustomOptions>) {
     this.loginUrl = loginUrl;
     this.authOptions = authOptions;
+
     if (customOptions) {
       Object.assign(this, customOptions);
       this.reusesExpiredCookies ||= this.storesExpiredCookies;
@@ -79,11 +101,14 @@ export default class AutoLoginFetchApp {
     // For CacheService, the maximum length of a key is 250 characters.
     this.cookiesKey = `AutoLoginFetchApp.${loginUrl}`.substring(0, 250);
     const cachedCookies = Cache.get(this.cookiesKey);
+
     if (cachedCookies && !this.reusesExpiredCookies) {
       this.cookies = JSON.parse(cachedCookies);
+
       const hasExpiredCookie = this.cookies?.some(it =>
         Object.entries(it).some(([key, value]) => key === 'Expires' && new Date(value) < new Date())
       );
+
       if (hasExpiredCookie) {
         // To retrive cookies when fetch() is called.
         this.cookies = undefined;
@@ -108,10 +133,18 @@ export default class AutoLoginFetchApp {
     Cache.remove(this.cookiesKey);
   }
 
-  public fetch(url: string, params: URLFetchRequestOptions = {}, useCache: boolean = true): HTTPResponse {
-    if (useCache && !this.cookies) {
+  private logging(message: string) {
+    if (this.logger) {
+      this.logger(message);
+    }
+  }
+
+  public fetch(url: string, params: URLFetchRequestOptions = {}, shouldRetrieveCookie: boolean = true): HTTPResponse {
+    if (shouldRetrieveCookie && !this.cookies) {
       this.retrieveCookies();
     }
+
+    params = { ...params, ...this.requestOptions };
 
     if (this.cookies) {
       params.headers = params.headers || {};
@@ -122,21 +155,22 @@ export default class AutoLoginFetchApp {
 
     for (let i = 1; i <= this.maxRetryCount; i++) {
       try {
-        console.log(`url: ${url}, params: ${JSON.stringify(params)}`);
+        this.logging(`url: ${url}, params: ${JSON.stringify(params)}`);
         this.sleepIfNeeded();
         const response = UrlFetchApp.fetch(url, params);
-        console.log(`status: ${response.getResponseCode()}, headers: ${JSON.stringify(response.getAllHeaders())}`);
         this.lastRequestTime = new Date().getTime();
+        this.logging(`status: ${response.getResponseCode()}, headers: ${JSON.stringify(response.getAllHeaders())}`);
+
         this.saveCookies(response.getAllHeaders());
         return response;
       } catch (err) {
         if (err !== null && typeof err === 'object' && 'getResponseCode' in err) {
           const httpResponse = err as GoogleAppsScript.URL_Fetch.HTTPResponse;
-          console.warn(`Tried ${i} times. Reponse Status Code: ${httpResponse.getResponseCode()}.`);
+          this.logging(`Tried ${i} times. Reponse Status Code: ${httpResponse.getResponseCode()}.`);
           Utilities.sleep(1000 * 2 ** i);
           continue;
         }
-        console.error(err);
+        this.logging(JSON.stringify(err));
       }
     }
     throw new Error('Occurred an unexpected error.');
@@ -152,7 +186,7 @@ export default class AutoLoginFetchApp {
 
   private retrieveCookies() {
     const loginPage = this.fetch(this.loginUrl, undefined, false);
-    const loginFormOptions = AutoLoginFetchApp.parseLoginForm(loginPage.getContentText());
+    const loginFormOptions = this.parseLoginForm(loginPage.getContentText());
 
     const req: URLFetchRequestOptions = {
       method: 'post',
@@ -161,7 +195,7 @@ export default class AutoLoginFetchApp {
       followRedirects: false,
     };
 
-    const headers = this.fetch(this.loginUrl, req).getAllHeaders();
+    const headers = this.fetch(this.loginUrl, req, false).getAllHeaders();
     if (!this.saveCookies(headers)) {
       throw new Error('Failed to retrive its Cookie.');
     }
@@ -173,40 +207,28 @@ export default class AutoLoginFetchApp {
         ? headers['Set-Cookie']
         : [headers['Set-Cookie']];
       this.cookies = respCookies.map(it => cookie.parse(it));
+
       if (!this.storesExpiredCookies) {
         // Remove expired cookies.
         this.cookies = this.cookies.filter(it => !(it.Expires && new Date(it.Expires) < new Date()));
       }
+
       Cache.put(this.cookiesKey, JSON.stringify(this.cookies), this.cacheExpiration);
       return true;
     }
     return false;
   }
 
-  private static parseLoginForm(htmlContent: string): FormParameters {
+  private parseLoginForm(htmlContent: string): FormParameters {
     const $ = cheerio.load(htmlContent);
 
-    const submitCount = $('form input button[type="submit"]').length;
-    const buttonCount = $('form input button[type="button"]').length;
-
     const formData: FormParameters = {};
-    $('form input').each((_, element) => {
+    $(this.loginFormInput).each((_, element) => {
       const name = $(element).attr('name');
       if (!name) {
         return;
       }
       const value = $(element).val();
-      const type = $(element).attr('type');
-
-      // Skip if there are multiple buttons and the name attribute does not include "login".
-      if (
-        (type === 'submit' || type === 'button') &&
-        submitCount + buttonCount !== 1 &&
-        !name.toLowerCase().includes('login')
-      ) {
-        return;
-      }
-
       formData[name] = value as string;
     });
 
