@@ -17,9 +17,16 @@ import * as cheerio from 'cheerio';
 import * as cookie from 'cookie';
 
 type URLFetchRequestOptions = GoogleAppsScript.URL_Fetch.URLFetchRequestOptions;
+type HttpMethod = GoogleAppsScript.URL_Fetch.HttpMethod;
 type HTTPResponse = GoogleAppsScript.URL_Fetch.HTTPResponse;
 
 type FormParameters = { [key: string]: string | number | boolean };
+
+type Form = {
+  action?: string;
+  method?: HttpMethod;
+  parameters: FormParameters;
+};
 
 export interface CustomOptions {
   /**
@@ -46,6 +53,11 @@ export interface CustomOptions {
    * It is normally set to `false` to replicate the behavior of a standard browser.
    */
   storesExpiredCookies: boolean;
+  /**
+   * Specify the CSS selector for form element that is sent with the login request.
+   * (default: 'form')
+   */
+  loginForm: string;
   /**
    * Specify the CSS selector for input elements that have parameters that are sent with the login request.
    * (default: 'form input')
@@ -81,6 +93,7 @@ export default class AutoLoginFetchApp {
   private readonly leastIntervalMills: number = 5000;
   private readonly reusesExpiredCookies: boolean = false;
   private readonly storesExpiredCookies: boolean = false;
+  private readonly loginForm: string = 'form';
   private readonly loginFormInput: string = 'form input';
   private readonly requestOptions: URLFetchRequestOptions = {};
   private readonly logger?: (message: string) => void;
@@ -95,6 +108,7 @@ export default class AutoLoginFetchApp {
 
     if (customOptions) {
       Object.assign(this, customOptions);
+      this.loginFormInput = customOptions.loginFormInput ?? `${this.loginForm} input`;
       this.reusesExpiredCookies ||= this.storesExpiredCookies;
     }
 
@@ -131,12 +145,6 @@ export default class AutoLoginFetchApp {
 
   public clearCachedCookies() {
     Cache.remove(this.cookiesKey);
-  }
-
-  private logging(message: string) {
-    if (this.logger) {
-      this.logger(message);
-    }
   }
 
   public fetch(url: string, params: URLFetchRequestOptions = {}, shouldRetrieveCookie: boolean = true): HTTPResponse {
@@ -176,6 +184,12 @@ export default class AutoLoginFetchApp {
     throw new Error('Occurred an unexpected error.');
   }
 
+  private logging(message: string) {
+    if (this.logger) {
+      this.logger(message);
+    }
+  }
+
   // This is a measure to avoid overloading the target site with scraping.
   private sleepIfNeeded() {
     const interval = new Date().getTime() - this.lastRequestTime;
@@ -186,16 +200,17 @@ export default class AutoLoginFetchApp {
 
   private retrieveCookies() {
     const loginPage = this.fetch(this.loginUrl, undefined, false);
-    const loginFormOptions = this.parseLoginForm(loginPage.getContentText());
+    const loginForm = this.parseLoginForm(loginPage.getContentText());
 
     const req: URLFetchRequestOptions = {
-      method: 'post',
-      payload: { ...loginFormOptions, ...this.authOptions },
+      method: loginForm.method ?? 'post',
+      payload: { ...loginForm.parameters, ...this.authOptions },
       // Logging in often results in an HTTP 302 redirect, which can cause unnecessary redirection.
       followRedirects: false,
     };
 
-    const headers = this.fetch(this.loginUrl, req, false).getAllHeaders();
+    const loginActionUrl = this.resolveLoginActionUrl(loginForm.action);
+    const headers = this.fetch(loginActionUrl, req, false).getAllHeaders();
     if (!this.saveCookies(headers)) {
       throw new Error('Failed to retrive its Cookie.');
     }
@@ -219,19 +234,38 @@ export default class AutoLoginFetchApp {
     return false;
   }
 
-  private parseLoginForm(htmlContent: string): FormParameters {
+  private parseLoginForm(htmlContent: string): Form {
     const $ = cheerio.load(htmlContent);
 
-    const formData: FormParameters = {};
+    // For form element
+    const action = $(this.loginForm).attr('action');
+    const method = $(this.loginForm).attr('method')?.toLowerCase() as HttpMethod;
+
+    // For input elements
+    const parameters: FormParameters = {};
     $(this.loginFormInput).each((_, element) => {
       const name = $(element).attr('name');
       if (!name) {
         return;
       }
       const value = $(element).val();
-      formData[name] = value as string;
+      parameters[name] = value as string;
     });
 
-    return formData;
+    return { action, method, parameters };
+  }
+
+  private resolveLoginActionUrl(actionUrl: string | undefined): string {
+    let baseURL: string | undefined;
+
+    if (actionUrl?.startsWith('/')) {
+      const originRegex = /^(https?:\/\/[^/]+)/;
+      baseURL = this.loginUrl.match(originRegex)?.[1];
+    } else {
+      const originAndParentPathRegex = /^(https?:\/\/[^/]+?\/[^?#]+\/)/;
+      baseURL = this.loginUrl.match(originAndParentPathRegex)?.[1];
+    }
+
+    return `${baseURL}${actionUrl}`;
   }
 }
