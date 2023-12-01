@@ -101,10 +101,10 @@ export default class AutoLoginFetchApp {
 
     // For CacheService, the maximum length of a key is 250 characters.
     this.cookiesKey = `AutoLoginFetchApp.${loginUrl}`.substring(0, 250);
-    const cachedCookies = Cache.get(this.cookiesKey);
 
+    const cachedCookies = Cache.get(this.cookiesKey);
     if (cachedCookies) {
-      this.cookieJar = JSON.parse(cachedCookies) as tough.CookieJar;
+      this.cookieJar = tough.CookieJar.deserializeSync(JSON.parse(cachedCookies));
     } else {
       this.cookieJar = new tough.CookieJar();
     }
@@ -117,9 +117,10 @@ export default class AutoLoginFetchApp {
   }
 
   public fetch(url: string, params: URLFetchRequestOptions = {}, shouldRetrieveCookie: boolean = true): HTTPResponse {
-    const hasCachedCookies = !!this.cookieJar.getCookiesSync(url).length;
+    let hasCachedCookies = !!this.cookieJar.getCookiesSync(url).length;
     if (shouldRetrieveCookie && !hasCachedCookies) {
       this.retrieveCookies();
+      hasCachedCookies = !!this.cookieJar.getCookiesSync(url).length;
     }
 
     params = { ...params, ...this.requestOptions };
@@ -178,10 +179,7 @@ export default class AutoLoginFetchApp {
     };
 
     const loginActionUrl = this.resolveLoginActionUrl(loginForm.action);
-    const headers = this.fetch(loginActionUrl, req, false).getAllHeaders();
-    if (!this.saveCookies(headers, loginActionUrl)) {
-      throw new Error('Failed to retrive its Cookie.');
-    }
+    this.fetch(loginActionUrl, req, false);
   }
 
   private parseLoginForm(htmlContent: string): Form {
@@ -219,7 +217,7 @@ export default class AutoLoginFetchApp {
     return `${baseURL}${actionUrl}`;
   }
 
-  private saveCookies(headers: { 'Set-Cookie'?: string }, url: string): boolean {
+  private saveCookies(headers: { 'Set-Cookie'?: string }, url: string) {
     if (headers['Set-Cookie']) {
       const respCookies: string[] = Array.isArray(headers['Set-Cookie'])
         ? headers['Set-Cookie']
@@ -228,11 +226,8 @@ export default class AutoLoginFetchApp {
       respCookies.map(it => this.cookieJar.setCookieSync(it, url));
       const cacheExpiration = this.getMinimumMaxAge(url);
 
-      JSON.stringify(this.cookieJar.serializeSync());
       Cache.put(this.cookiesKey, JSON.stringify(this.cookieJar.serializeSync()), cacheExpiration);
-      return true;
     }
-    return false;
   }
 
   private getMinimumMaxAge(url: string): number {
