@@ -204,17 +204,15 @@ export default class AutoLoginFetchApp {
   }
 
   private resolveLoginActionUrl(actionUrl: string | undefined): string {
-    let baseURL: string | undefined;
-
     if (actionUrl?.startsWith('/')) {
       const originRegex = /^(https?:\/\/[^/]+)/;
-      baseURL = this.loginUrl.match(originRegex)?.[1];
-    } else {
-      const originAndParentPathRegex = /^(https?:\/\/[^/]+?\/[^?#]+\/)/;
-      baseURL = this.loginUrl.match(originAndParentPathRegex)?.[1];
+      return `${this.loginUrl.match(originRegex)?.[1]}${actionUrl}`;
     }
-
-    return `${baseURL}${actionUrl}`;
+    if (actionUrl) {
+      const originAndParentPathRegex = /^(https?:\/\/[^/]+?\/[^?#]+\/)/;
+      return `${this.loginUrl.match(originAndParentPathRegex)?.[1]}${actionUrl}`;
+    }
+    return this.loginUrl;
   }
 
   private saveCookies(headers: { 'Set-Cookie'?: string }, url: string) {
