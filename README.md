@@ -24,25 +24,6 @@ function main() {
 }
 ```
 
-### For local development with TypeScript
-
-I recommend using Git's submodule to include it in your project.  
-It is also easier if you use this project itself as a template.
-
-```bash
-mkdir -p /path/to/your-project
-cd /path/to/your-project
-
-REPO_URL=https://github.com/nimzo6689/gas-AutoLoginFetchApp.git
-
-git clone --depth=1 --no-commit-history $REPO_URL
-
-npm install
-
-rm -rf src/client/common
-git submodule add -b main $REPO_URL/src/client/common src/client/common
-```
-
 ## Functions
 
 ### Re-use Cookies
