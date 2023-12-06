@@ -112,10 +112,6 @@ export default class AutoLoginFetchApp {
     this.lastRequestTime = new Date().getTime() - this.leastIntervalMills;
   }
 
-  public clearCachedCookies() {
-    Cache.remove(this.cookiesKey);
-  }
-
   public fetch(url: string, params: URLFetchRequestOptions = {}, shouldRetrieveCookie: boolean = true): HTTPResponse {
     let hasCachedCookies = !!this.cookieJar.getCookiesSync(url).length;
     if (shouldRetrieveCookie && !hasCachedCookies) {
