@@ -19,6 +19,7 @@ import * as tough from 'tough-cookie';
 type URLFetchRequestOptions = GoogleAppsScript.URL_Fetch.URLFetchRequestOptions;
 type HttpMethod = GoogleAppsScript.URL_Fetch.HttpMethod;
 type HTTPResponse = GoogleAppsScript.URL_Fetch.HTTPResponse;
+type Cache = GoogleAppsScript.Cache.Cache;
 
 type FormParameters = { [key: string]: string | number | boolean };
 
@@ -63,13 +64,6 @@ export interface CustomOptions {
   logger: (message: string) => void;
 }
 
-// We need to retain cookies for a combination of the user executing the Apps Script
-// and the target site being logged in, so we will use UserCache.
-// Never use ScriptCache and DocumentCache as they could potentially be exploited for session hijacking.
-const Cache = CacheService.getUserCache();
-
-const MAX_CACHE_EXPIRATION = 21600;
-
 export default class AutoLoginFetchApp {
   private readonly loginUrl: string;
   private readonly authOptions: FormParameters;
@@ -82,6 +76,10 @@ export default class AutoLoginFetchApp {
   private readonly requestOptions: URLFetchRequestOptions = {};
   private readonly logger?: (message: string) => void;
 
+  // We need to retain cookies for a combination of the user executing the Apps Script
+  // and the target site being logged in, so we will use UserCache.
+  // Never use ScriptCache and DocumentCache as they could potentially be exploited for session hijacking.
+  private readonly cacheStore: Cache = CacheService.getUserCache();
   private readonly cookieJar: tough.CookieJar;
   // Normally, cookies are stored in UserCache based on the login URL.
   // When multiple users log in to the same login destination,
@@ -102,7 +100,7 @@ export default class AutoLoginFetchApp {
     // For CacheService, the maximum length of a key is 250 characters.
     this.cookiesKey = `AutoLoginFetchApp.${loginUrl}`.substring(0, 250);
 
-    const cachedCookies = Cache.get(this.cookiesKey);
+    const cachedCookies = this.cacheStore.get(this.cookiesKey);
     if (cachedCookies) {
       this.cookieJar = tough.CookieJar.deserializeSync(JSON.parse(cachedCookies));
     } else {
@@ -220,15 +218,17 @@ export default class AutoLoginFetchApp {
       respCookies.map(it => this.cookieJar.setCookieSync(it, url));
       const cacheExpiration = this.getMinimumMaxAge(url);
 
-      Cache.put(this.cookiesKey, JSON.stringify(this.cookieJar.serializeSync()), cacheExpiration);
+      this.cacheStore.put(this.cookiesKey, JSON.stringify(this.cookieJar.serializeSync()), cacheExpiration);
     }
   }
 
   private getMinimumMaxAge(url: string): number {
+    const maxCacheExpiration = 21600;
+
     const maxAgeList = this.cookieJar.getCookiesSync(url).map(it => {
       const now = Date.now();
 
-      let maxAge: number = MAX_CACHE_EXPIRATION;
+      let maxAge: number = maxCacheExpiration;
       if (typeof it.expires === 'object' && it.expires instanceof Date) {
         maxAge = Math.floor((it.expires.getTime() - now) / 1000);
       }
@@ -239,6 +239,6 @@ export default class AutoLoginFetchApp {
     });
 
     const minimumMaxAge = Math.min(...maxAgeList);
-    return minimumMaxAge > MAX_CACHE_EXPIRATION ? MAX_CACHE_EXPIRATION : minimumMaxAge;
+    return minimumMaxAge > maxCacheExpiration ? maxCacheExpiration : minimumMaxAge;
   }
 }
