@@ -1,5 +1,8 @@
 # AutoLoginFetchApp
 
+[![testings](https://github.com/nimzo6689/gas-AutoLoginFetchApp/actions/workflows/ci.yml/badge.svg)](https://github.com/nimzo6689/gas-AutoLoginFetchApp/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/nimzo6689/gas-AutoLoginFetchApp/graph/badge.svg?token=UDW6qCVPzR)](https://codecov.io/gh/nimzo6689/gas-AutoLoginFetchApp)
+
 UrlFetchApp with auto-login functionality for Google Apps Script.  
 It is useful for scraping websites that require login and for automated operation of websites.
 
