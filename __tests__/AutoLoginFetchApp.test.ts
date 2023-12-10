@@ -92,12 +92,13 @@ describe('AutoLoginFetchApp', () => {
       expect(UrlFetchApp.fetch).toHaveBeenCalledTimes(nth);
 
       const argCaptor = captor();
-      expect(CacheService.getUserCache().put).toHaveBeenLastCalledWith(argCaptor, argCaptor, argCaptor);
-      const [cacheExpiration, cachedValue, cookiesKey] = argCaptor.values;
-      expect(cookiesKey).toBe(`AutoLoginFetchApp.${loginUrl}`);
-      const cookie = tough.CookieJar.deserializeSync(cachedValue).getCookieStringSync(loginUrl);
+      expect(CacheService.getUserCache().put).toHaveBeenLastCalledWith(
+        `AutoLoginFetchApp.${loginUrl}`,
+        argCaptor,
+        21600
+      );
+      const cookie = tough.CookieJar.deserializeSync(argCaptor.value).getCookieStringSync(loginUrl);
       expect(cookie).toBe(sessionIdCookie);
-      expect(cacheExpiration).toBe(21600);
     });
 
     it('Second run before cache expires', () => {
