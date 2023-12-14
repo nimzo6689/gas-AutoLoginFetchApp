@@ -76,12 +76,12 @@ function asyncTo(callback: () => HTTPResponse): Promise<HTTPResponse> {
 }
 
 describe('AutoLoginFetchApp', () => {
-  describe('Default behavior', () => {
-    beforeAll(() => {
-      Utilities = mock<GoogleAppsScript.Utilities.Utilities>();
-      console = mock<Console>();
-    });
+  beforeAll(() => {
+    Utilities = mock<GoogleAppsScript.Utilities.Utilities>();
+    console = mock<Console>();
+  });
 
+  describe('Default behavior', () => {
     it('fetch with empty cache', () => {
       // ---- Arrange ----
       CacheService.getUserCache = mockCache();
@@ -217,6 +217,41 @@ describe('AutoLoginFetchApp', () => {
       expect(console.log).toHaveBeenNthCalledWith(++nth, `status: 200, headers: {}`);
 
       expect(console.log).toHaveBeenCalledTimes(nth);
+    });
+  });
+
+  describe('Irregular website behavior', () => {
+    it('returns multiple Cookies', () => {
+      // ---- Arrange ----
+      CacheService.getUserCache = mockCache();
+
+      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
+      const subSessionIdCookie = 'sub_session_id=yyyyy';
+      UrlFetchApp = mockUrlFetchAppForEach(
+        mockResponse(200, {}, loginHtml),
+        mockResponse(302, { 'Set-Cookie': [sessionIdCookie, subSessionIdCookie] }),
+        mockResponse(200)
+      );
+
+      // ---- Act ----
+      const client = new AutoLoginFetchApp(loginUrl, authOptions);
+      const response = client.fetch(mypageUrl);
+
+      // ---- Assertion ----
+      expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(3, mypageUrl, {
+        headers: {
+          Cookie: `${sessionIdCookie}; ${subSessionIdCookie}`,
+        },
+      });
+
+      const argCaptor = captor();
+      expect(CacheService.getUserCache().put).toHaveBeenLastCalledWith(
+        `AutoLoginFetchApp.${loginUrl}`,
+        argCaptor,
+        21600
+      );
+      const cookie = tough.CookieJar.deserializeSync(argCaptor.value).getCookieStringSync(loginUrl);
+      expect(cookie).toBe(`${sessionIdCookie}; ${subSessionIdCookie}`);
     });
   });
 });
