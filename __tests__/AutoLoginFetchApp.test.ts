@@ -33,6 +33,8 @@ const authOptions = {
 };
 
 const sessionIdCookie = 'session_id=xxxxx';
+const cachedCookies =
+  '{"version":"tough-cookie@4.1.3","storeType":"MemoryCookieStore","rejectPublicSuffixes":true,"enableLooseMode":false,"allowSpecialUseDomain":true,"prefixSecurity":"silent","cookies":[{"key":"session_id","value":"xxxxx","domain":"localhost","path":"/","hostOnly":true,"pathIsDefault":true,"creation":"2023-12-10T00:11:59.049Z","lastAccessed":"2023-12-10T00:11:59.053Z"}]}';
 
 // ---- Mocking Factory Functions ----
 
@@ -76,14 +78,12 @@ function asyncTo(callback: () => HTTPResponse): Promise<HTTPResponse> {
 describe('AutoLoginFetchApp', () => {
   describe('Default behavior', () => {
     beforeAll(() => {
-      Utilities.sleep = jest.fn(_ => {
-        /* Do nothing. */
-      });
+      Utilities = mock<GoogleAppsScript.Utilities.Utilities>();
+      console = mock<Console>();
     });
 
     it('fetch with empty cache', () => {
       // ---- Arrange ----
-      // UserCache does not have any cookies.
       CacheService.getUserCache = mockCache();
 
       const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
@@ -130,9 +130,6 @@ describe('AutoLoginFetchApp', () => {
 
     it('Second run before cache expires', () => {
       // ---- Arrange ----
-      // UserCache does not have any cookies.
-      const cachedCookies =
-        '{"version":"tough-cookie@4.1.3","storeType":"MemoryCookieStore","rejectPublicSuffixes":true,"enableLooseMode":false,"allowSpecialUseDomain":true,"prefixSecurity":"silent","cookies":[{"key":"session_id","value":"xxxxx","domain":"localhost","path":"/","hostOnly":true,"pathIsDefault":true,"creation":"2023-12-10T00:11:59.049Z","lastAccessed":"2023-12-10T00:11:59.053Z"}]}';
       CacheService.getUserCache = mockCache(cachedCookies);
 
       UrlFetchApp = mockUrlFetchAppForEach(mockResponse(200));
@@ -159,7 +156,6 @@ describe('AutoLoginFetchApp', () => {
   describe('CustomOptions behavior', () => {
     it('maxRetryCount = 2', () => {
       // ---- Arrange ----
-      // UserCache does not have any cookies.
       CacheService.getUserCache = mockCache();
 
       const errorMessage = 'Request failed for `url` returned code 429';
@@ -186,24 +182,41 @@ describe('AutoLoginFetchApp', () => {
       expect(UrlFetchApp.fetch).toHaveBeenCalledTimes(nth);
     });
 
-    it('leastIntervalMills = 0', () => {
-      //TODO
-    });
+    it('Logging is enable', () => {
+      // ---- Arrange ----
+      CacheService.getUserCache = mockCache();
+      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
+      UrlFetchApp = mockUrlFetchAppForEach(
+        mockResponse(200, {}, loginHtml),
+        mockResponse(302, { 'Set-Cookie': sessionIdCookie }),
+        mockResponse(200)
+      );
+      // ---- Act ----
+      const client = new AutoLoginFetchApp(loginUrl, authOptions, {
+        logging: true,
+      });
+      const response = client.fetch(mypageUrl);
+      // ---- Assertion ----
+      let nth = 0;
+      expect(console.log).toHaveBeenNthCalledWith(++nth, `url: ${loginUrl}, params: {}`);
+      expect(console.log).toHaveBeenNthCalledWith(++nth, `status: 200, headers: {}`);
 
-    it('loginForm = form[name="login"]', () => {
-      //TODO
-    });
+      expect(console.log).toHaveBeenNthCalledWith(
+        ++nth,
+        `url: ${loginUrl}-request, params: {\"method\":\"post\",\"payload\":{\"username\":\"${authOptions.username}\",\"password\":\"${authOptions.password}\",\"submit\":\"login\"},\"followRedirects\":false}`
+      );
+      expect(console.log).toHaveBeenNthCalledWith(
+        ++nth,
+        `status: 302, headers: {\"Set-Cookie\":\"${sessionIdCookie}\"}`
+      );
 
-    it('loginFormInput = input:not([name="btnClear"])', () => {
-      //TODO
-    });
+      expect(console.log).toHaveBeenNthCalledWith(
+        ++nth,
+        `url: ${mypageUrl}, params: {\"headers\":{\"Cookie\":\"${sessionIdCookie}\"}}`
+      );
+      expect(console.log).toHaveBeenNthCalledWith(++nth, `status: 200, headers: {}`);
 
-    it('requestOptions = muteHttpExceptions:true', () => {
-      //TODO
-    });
-
-    it('logger = console.log', () => {
-      //TODO
+      expect(console.log).toHaveBeenCalledTimes(nth);
     });
   });
 });

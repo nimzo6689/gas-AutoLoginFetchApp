@@ -55,13 +55,10 @@ export interface CustomOptions {
    */
   requestOptions: URLFetchRequestOptions;
   /**
-   * Specify the logging function, such as `console.log`.
+   * Enable logging.
    * The request, response and logs in the event of an error will be output.
-   *
-   * @param message
-   * @returns
    */
-  logger: (message: string) => void;
+  logging: boolean;
 }
 
 export default class AutoLoginFetchApp {
@@ -74,7 +71,7 @@ export default class AutoLoginFetchApp {
   private readonly loginForm: string = 'form';
   private readonly loginFormInput: string = 'form input';
   private readonly requestOptions: URLFetchRequestOptions = {};
-  private readonly logger?: (message: string) => void;
+  private readonly logging: boolean = false;
 
   // We need to retain cookies for a combination of the user executing the Apps Script
   // and the target site being logged in, so we will use UserCache.
@@ -127,17 +124,17 @@ export default class AutoLoginFetchApp {
     let lastError: Error = new Error('Unexpected Error');
     for (let i = 1; i <= this.maxRetryCount; i++) {
       try {
-        this.logging(`url: ${url}, params: ${JSON.stringify(params)}`);
+        this.log(`url: ${url}, params: ${JSON.stringify(params)}`);
         this.sleepIfNeeded();
         const response = UrlFetchApp.fetch(url, params);
         this.lastRequestTime = new Date().getTime();
-        this.logging(`status: ${response.getResponseCode()}, headers: ${JSON.stringify(response.getAllHeaders())}`);
+        this.log(`status: ${response.getResponseCode()}, headers: ${JSON.stringify(response.getAllHeaders())}`);
 
         this.saveCookies(response.getAllHeaders(), url);
         return response;
       } catch (error) {
         if (error instanceof Error) {
-          this.logging(`Tried ${i} times. Reponse Status Code: ${error.message}.`);
+          this.log(`Tried ${i} times. Reponse Status Code: ${error.message}.`);
           lastError = error;
           Utilities.sleep(1000 * 2 ** i);
           continue;
@@ -147,9 +144,10 @@ export default class AutoLoginFetchApp {
     throw lastError;
   }
 
-  private logging(message: string) {
-    if (this.logger) {
-      this.logger(message);
+  private log(message: string) {
+    if (this.logging) {
+      // eslint-disable-next-line no-console
+      console.log(message);
     }
   }
 
