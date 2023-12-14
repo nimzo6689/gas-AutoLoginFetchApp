@@ -227,10 +227,10 @@ export default class AutoLoginFetchApp {
       const now = Date.now();
 
       let maxAge: number = maxCacheExpiration;
-      if (typeof it.expires === 'object' && it.expires instanceof Date) {
+      if (it.expires instanceof Date) {
         maxAge = Math.floor((it.expires.getTime() - now) / 1000);
       }
-      if (typeof it.maxAge === 'object' && it.expires instanceof Number) {
+      if (typeof it.maxAge === 'number') {
         maxAge = Math.min(maxAge, it.maxAge);
       }
       return maxAge;

@@ -191,11 +191,13 @@ describe('AutoLoginFetchApp', () => {
         mockResponse(302, { 'Set-Cookie': sessionIdCookie }),
         mockResponse(200)
       );
+
       // ---- Act ----
       const client = new AutoLoginFetchApp(loginUrl, authOptions, {
         logging: true,
       });
-      const response = client.fetch(mypageUrl);
+      client.fetch(mypageUrl);
+
       // ---- Assertion ----
       let nth = 0;
       expect(console.log).toHaveBeenNthCalledWith(++nth, `url: ${loginUrl}, params: {}`);
@@ -235,7 +237,7 @@ describe('AutoLoginFetchApp', () => {
 
       // ---- Act ----
       const client = new AutoLoginFetchApp(loginUrl, authOptions);
-      const response = client.fetch(mypageUrl);
+      client.fetch(mypageUrl);
 
       // ---- Assertion ----
       expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(3, mypageUrl, {
@@ -252,6 +254,72 @@ describe('AutoLoginFetchApp', () => {
       );
       const cookie = tough.CookieJar.deserializeSync(argCaptor.value).getCookieStringSync(loginUrl);
       expect(cookie).toBe(`${sessionIdCookie}; ${subSessionIdCookie}`);
+    });
+
+    it('returns short expiration cookies at Max-Age', () => {
+      // ---- Arrange ----
+      CacheService.getUserCache = mockCache();
+
+      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
+      const cookieExpiration = 3600;
+      UrlFetchApp = mockUrlFetchAppForEach(
+        mockResponse(200, {}, loginHtml),
+        mockResponse(302, { 'Set-Cookie': `${sessionIdCookie}; Max-Age=${cookieExpiration}` }),
+        mockResponse(200)
+      );
+
+      // ---- Act ----
+      const client = new AutoLoginFetchApp(loginUrl, authOptions);
+      client.fetch(mypageUrl);
+
+      expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(3, mypageUrl, {
+        headers: {
+          Cookie: sessionIdCookie,
+        },
+      });
+
+      const argCaptor = captor();
+      expect(CacheService.getUserCache().put).toHaveBeenLastCalledWith(
+        `AutoLoginFetchApp.${loginUrl}`,
+        argCaptor,
+        cookieExpiration
+      );
+      const cookie = tough.CookieJar.deserializeSync(argCaptor.value).getCookieStringSync(loginUrl);
+      expect(cookie).toBe(sessionIdCookie);
+    });
+
+    it('returns short expiration cookies at Expires', () => {
+      // ---- Arrange ----
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('Thu, 14 Dec 2023 18:00:00 GMT').getTime());
+
+      CacheService.getUserCache = mockCache();
+
+      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
+      const cookieExpiration = 3600;
+      UrlFetchApp = mockUrlFetchAppForEach(
+        mockResponse(200, {}, loginHtml),
+        mockResponse(302, { 'Set-Cookie': `${sessionIdCookie}; Expires=Thu, 14 Dec 2023 19:00:00 GMT` }),
+        mockResponse(200)
+      );
+
+      // ---- Act ----
+      const client = new AutoLoginFetchApp(loginUrl, authOptions);
+      client.fetch(mypageUrl);
+
+      expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(3, mypageUrl, {
+        headers: {
+          Cookie: sessionIdCookie,
+        },
+      });
+
+      const argCaptor = captor();
+      expect(CacheService.getUserCache().put).toHaveBeenLastCalledWith(
+        `AutoLoginFetchApp.${loginUrl}`,
+        argCaptor,
+        cookieExpiration
+      );
+      const cookie = tough.CookieJar.deserializeSync(argCaptor.value).getCookieStringSync(loginUrl);
+      expect(cookie).toBe(sessionIdCookie);
     });
   });
 });
