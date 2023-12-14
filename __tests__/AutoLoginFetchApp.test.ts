@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 import * as fs from 'node:fs';
-import { captor, mock } from 'jest-mock-extended';
+import { captor, mock, MockProxy } from 'jest-mock-extended';
 import * as tough from 'tough-cookie';
 import AutoLoginFetchApp from '../src/client/common/AutoLoginFetchApp';
 
 type UrlFetchApp = GoogleAppsScript.URL_Fetch.UrlFetchApp;
 type HTTPResponse = GoogleAppsScript.URL_Fetch.HTTPResponse;
 type Cache = GoogleAppsScript.Cache.Cache;
+
+// ---- Constants ----
 
 const loginUrl = 'https://localhost/login';
 const mypageUrl = 'https://localhost/mypage';
@@ -31,6 +33,14 @@ const authOptions = {
 };
 
 const sessionIdCookie = 'session_id=xxxxx';
+
+// ---- Mocking Factory Functions ----
+
+function mockCache(cachedValue: string | null = null): jest.Mock<Cache> {
+  const cache = mock<Cache>();
+  cache.get.mockReturnValue(cachedValue);
+  return jest.fn().mockReturnValue(cache);
+}
 
 function mockResponse(
   responseCode: number,
@@ -44,6 +54,25 @@ function mockResponse(
   return mockedResponse;
 }
 
+function mockUrlFetchAppForEach(...response: HTTPResponse[]): MockProxy<UrlFetchApp> {
+  const mockedApp = mock<UrlFetchApp>();
+  response.forEach(mockedApp.fetch.mockReturnValueOnce);
+  return mockedApp;
+}
+
+// ---- Action Utilities ----
+
+function asyncTo(callback: () => HTTPResponse): Promise<HTTPResponse> {
+  return new Promise((resolve, reject) => {
+    try {
+      const response = callback();
+      resolve(response);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 describe('AutoLoginFetchApp', () => {
   describe('Default behavior', () => {
     beforeAll(() => {
@@ -55,16 +84,14 @@ describe('AutoLoginFetchApp', () => {
     it('fetch with empty cache', () => {
       // ---- Arrange ----
       // UserCache does not have any cookies.
-      const cache = mock<Cache>();
-      cache.get.mockReturnValue(null);
-      CacheService.getUserCache = jest.fn().mockReturnValue(cache);
+      CacheService.getUserCache = mockCache();
 
-      const mockedApp = mock<UrlFetchApp>();
       const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
-      mockedApp.fetch.mockReturnValueOnce(mockResponse(200, {}, loginHtml));
-      mockedApp.fetch.mockReturnValueOnce(mockResponse(302, { 'Set-Cookie': sessionIdCookie }));
-      mockedApp.fetch.mockReturnValueOnce(mockResponse(200));
-      UrlFetchApp = mockedApp;
+      UrlFetchApp = mockUrlFetchAppForEach(
+        mockResponse(200, {}, loginHtml),
+        mockResponse(302, { 'Set-Cookie': sessionIdCookie }),
+        mockResponse(200)
+      );
 
       // ---- Act ----
       const client = new AutoLoginFetchApp(loginUrl, authOptions);
@@ -104,16 +131,11 @@ describe('AutoLoginFetchApp', () => {
     it('Second run before cache expires', () => {
       // ---- Arrange ----
       // UserCache does not have any cookies.
-      const cache = mock<Cache>();
       const cachedCookies =
         '{"version":"tough-cookie@4.1.3","storeType":"MemoryCookieStore","rejectPublicSuffixes":true,"enableLooseMode":false,"allowSpecialUseDomain":true,"prefixSecurity":"silent","cookies":[{"key":"session_id","value":"xxxxx","domain":"localhost","path":"/","hostOnly":true,"pathIsDefault":true,"creation":"2023-12-10T00:11:59.049Z","lastAccessed":"2023-12-10T00:11:59.053Z"}]}';
-      cache.get.mockReturnValue(cachedCookies);
-      CacheService.getUserCache = jest.fn().mockReturnValue(cache);
+      CacheService.getUserCache = mockCache(cachedCookies);
 
-      const mockedApp = mock<UrlFetchApp>();
-      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
-      mockedApp.fetch.mockReturnValueOnce(mockResponse(200));
-      UrlFetchApp = mockedApp;
+      UrlFetchApp = mockUrlFetchAppForEach(mockResponse(200));
 
       // ---- Act ----
       const client = new AutoLoginFetchApp(loginUrl, authOptions);
@@ -136,7 +158,32 @@ describe('AutoLoginFetchApp', () => {
 
   describe('CustomOptions behavior', () => {
     it('maxRetryCount = 2', () => {
-      //TODO
+      // ---- Arrange ----
+      // UserCache does not have any cookies.
+      CacheService.getUserCache = mockCache();
+
+      const errorMessage = 'Request failed for `url` returned code 429';
+      UrlFetchApp = mock<UrlFetchApp>(
+        {},
+        {
+          fallbackMockImplementation: () => {
+            throw new Error(errorMessage);
+          },
+        }
+      );
+
+      // ---- Act ----
+      const client = new AutoLoginFetchApp(loginUrl, authOptions, {
+        maxRetryCount: 2,
+      });
+      const response = asyncTo(() => client.fetch(mypageUrl));
+
+      // ---- Assertion ----
+      expect(response).rejects.toThrow(errorMessage);
+      let nth = 0;
+      expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(++nth, loginUrl, {});
+      expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(++nth, loginUrl, {});
+      expect(UrlFetchApp.fetch).toHaveBeenCalledTimes(nth);
     });
 
     it('leastIntervalMills = 0', () => {

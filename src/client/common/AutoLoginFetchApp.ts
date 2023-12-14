@@ -124,6 +124,7 @@ export default class AutoLoginFetchApp {
       params.headers['Cookie'] = this.cookieJar.getCookieStringSync(url);
     }
 
+    let lastError: Error = new Error('Unexpected Error');
     for (let i = 1; i <= this.maxRetryCount; i++) {
       try {
         this.logging(`url: ${url}, params: ${JSON.stringify(params)}`);
@@ -134,17 +135,16 @@ export default class AutoLoginFetchApp {
 
         this.saveCookies(response.getAllHeaders(), url);
         return response;
-      } catch (err) {
-        if (err !== null && typeof err === 'object' && 'getResponseCode' in err) {
-          const httpResponse = err as GoogleAppsScript.URL_Fetch.HTTPResponse;
-          this.logging(`Tried ${i} times. Reponse Status Code: ${httpResponse.getResponseCode()}.`);
+      } catch (error) {
+        if (error instanceof Error) {
+          this.logging(`Tried ${i} times. Reponse Status Code: ${error.message}.`);
+          lastError = error;
           Utilities.sleep(1000 * 2 ** i);
           continue;
         }
-        this.logging(JSON.stringify(err));
       }
     }
-    throw new Error('Occurred an unexpected error.');
+    throw lastError;
   }
 
   private logging(message: string) {
