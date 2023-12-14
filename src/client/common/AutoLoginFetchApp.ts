@@ -31,12 +31,14 @@ type Form = {
 
 export interface CustomOptions {
   /**
-   * If communication fails, it is retried up to 5 times by default.
+   * If communication fails, it is retried up.
+   * (default: 1)
    */
   maxRetryCount: number;
   /**
-   * Wait 5 seconds by default from the last request to avoid making a request.
+   * Wait a certain millsecond from the last request to avoid making a request.
    * This is a measure to avoid overloading the target site with scraping.
+   * (default: 0)
    */
   leastIntervalMills: number;
   /**
@@ -57,6 +59,7 @@ export interface CustomOptions {
   /**
    * Enable logging.
    * The request, response and logs in the event of an error will be output.
+   * (default: false)
    */
   logging: boolean;
 }
@@ -66,8 +69,8 @@ export default class AutoLoginFetchApp {
   private readonly authOptions: FormParameters;
 
   // For customOptions
-  private readonly maxRetryCount: number = 5;
-  private readonly leastIntervalMills: number = 5000;
+  private readonly maxRetryCount: number = 1;
+  private readonly leastIntervalMills: number = 0;
   private readonly loginForm: string = 'form';
   private readonly loginFormInput: string = 'form input';
   private readonly requestOptions: URLFetchRequestOptions = {};
