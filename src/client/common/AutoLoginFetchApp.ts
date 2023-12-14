@@ -164,7 +164,7 @@ export default class AutoLoginFetchApp {
     const loginForm = this.parseLoginForm(loginPage.getContentText());
 
     const req: URLFetchRequestOptions = {
-      method: loginForm.method ?? 'post',
+      method: loginForm.method ?? 'get',
       payload: { ...loginForm.parameters, ...this.authOptions },
       // Logging in often results in an HTTP 302 redirect, which can cause unnecessary redirection.
       followRedirects: false,
