@@ -86,7 +86,7 @@ describe('AutoLoginFetchApp', () => {
       // ---- Arrange ----
       CacheService.getUserCache = mockCache();
 
-      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
+      const loginHtml = fs.readFileSync('./__tests__/resources/login_action_absolute.html', 'utf8');
       UrlFetchApp = mockUrlFetchAppForEach(
         mockResponse(200, {}, loginHtml),
         mockResponse(302, { 'Set-Cookie': sessionIdCookie }),
@@ -185,7 +185,7 @@ describe('AutoLoginFetchApp', () => {
     it('Logging is enable', () => {
       // ---- Arrange ----
       CacheService.getUserCache = mockCache();
-      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
+      const loginHtml = fs.readFileSync('./__tests__/resources/login_action_absolute.html', 'utf8');
       UrlFetchApp = mockUrlFetchAppForEach(
         mockResponse(200, {}, loginHtml),
         mockResponse(302, { 'Set-Cookie': sessionIdCookie }),
@@ -227,7 +227,7 @@ describe('AutoLoginFetchApp', () => {
       // ---- Arrange ----
       CacheService.getUserCache = mockCache();
 
-      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
+      const loginHtml = fs.readFileSync('./__tests__/resources/login_action_absolute.html', 'utf8');
       const subSessionIdCookie = 'sub_session_id=yyyyy';
       UrlFetchApp = mockUrlFetchAppForEach(
         mockResponse(200, {}, loginHtml),
@@ -260,7 +260,7 @@ describe('AutoLoginFetchApp', () => {
       // ---- Arrange ----
       CacheService.getUserCache = mockCache();
 
-      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
+      const loginHtml = fs.readFileSync('./__tests__/resources/login_action_absolute.html', 'utf8');
       const cookieExpiration = 3600;
       UrlFetchApp = mockUrlFetchAppForEach(
         mockResponse(200, {}, loginHtml),
@@ -294,7 +294,7 @@ describe('AutoLoginFetchApp', () => {
 
       CacheService.getUserCache = mockCache();
 
-      const loginHtml = fs.readFileSync('./__tests__/resources/login.html', 'utf8');
+      const loginHtml = fs.readFileSync('./__tests__/resources/login_action_absolute.html', 'utf8');
       const cookieExpiration = 3600;
       UrlFetchApp = mockUrlFetchAppForEach(
         mockResponse(200, {}, loginHtml),
@@ -320,6 +320,60 @@ describe('AutoLoginFetchApp', () => {
       );
       const cookie = tough.CookieJar.deserializeSync(argCaptor.value).getCookieStringSync(loginUrl);
       expect(cookie).toBe(sessionIdCookie);
+    });
+  });
+
+  it('actionUrl is relative path', () => {
+    // ---- Arrange ----
+    CacheService.getUserCache = mockCache();
+
+    const loginHtml = fs.readFileSync('./__tests__/resources/login_action_relative.html', 'utf8');
+    UrlFetchApp = mockUrlFetchAppForEach(
+      mockResponse(200, {}, loginHtml),
+      mockResponse(302, { 'Set-Cookie': sessionIdCookie }),
+      mockResponse(200)
+    );
+
+    // ---- Act ----
+    const client = new AutoLoginFetchApp(loginUrl, authOptions);
+    const response = client.fetch(mypageUrl);
+
+    // ---- Assertion ----
+    expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(2, `${loginUrl}-request`, {
+      followRedirects: false,
+      method: 'post',
+      payload: {
+        username: authOptions.username,
+        password: authOptions.password,
+        submit: 'login',
+      },
+    });
+  });
+
+  it('actionUrl is none', () => {
+    // ---- Arrange ----
+    CacheService.getUserCache = mockCache();
+
+    const loginHtml = fs.readFileSync('./__tests__/resources/login_action_none.html', 'utf8');
+    UrlFetchApp = mockUrlFetchAppForEach(
+      mockResponse(200, {}, loginHtml),
+      mockResponse(302, { 'Set-Cookie': sessionIdCookie }),
+      mockResponse(200)
+    );
+
+    // ---- Act ----
+    const client = new AutoLoginFetchApp(loginUrl, authOptions);
+    const response = client.fetch(mypageUrl);
+
+    // ---- Assertion ----
+    expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(2, loginUrl, {
+      followRedirects: false,
+      method: 'post',
+      payload: {
+        username: authOptions.username,
+        password: authOptions.password,
+        submit: 'login',
+      },
     });
   });
 });

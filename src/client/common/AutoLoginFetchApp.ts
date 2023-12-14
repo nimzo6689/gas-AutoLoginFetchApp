@@ -201,7 +201,7 @@ export default class AutoLoginFetchApp {
       return `${this.loginUrl.match(originRegex)?.[1]}${actionUrl}`;
     }
     if (actionUrl) {
-      const originAndParentPathRegex = /^(https?:\/\/[^/]+?\/[^?#]+\/)/;
+      const originAndParentPathRegex = /^(https?:\/\/[^?#]+\/)/;
       return `${this.loginUrl.match(originAndParentPathRegex)?.[1]}${actionUrl}`;
     }
     return this.loginUrl;
