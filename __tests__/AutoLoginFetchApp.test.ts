@@ -81,6 +81,10 @@ describe('AutoLoginFetchApp', () => {
     console = mock<Console>();
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe('Default behavior', () => {
     it('fetch with empty cache', () => {
       // ---- Arrange ----
@@ -154,7 +158,7 @@ describe('AutoLoginFetchApp', () => {
   });
 
   describe('CustomOptions behavior', () => {
-    it('maxRetryCount = 2', () => {
+    it('maxRetryCount is 2', () => {
       // ---- Arrange ----
       CacheService.getUserCache = mockCache();
 
@@ -180,6 +184,32 @@ describe('AutoLoginFetchApp', () => {
       expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(++nth, loginUrl, {});
       expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(++nth, loginUrl, {});
       expect(UrlFetchApp.fetch).toHaveBeenCalledTimes(nth);
+    });
+
+    it('leastIntervalMills is 3 seconds', () => {
+      // ---- Arrange ----
+      jest.spyOn(Date, 'now').mockReturnValue(new Date('Thu, 14 Dec 2023 18:00:00 GMT').getTime());
+
+      CacheService.getUserCache = mockCache();
+
+      const loginHtml = fs.readFileSync('./__tests__/resources/login_action_absolute.html', 'utf8');
+      UrlFetchApp = mockUrlFetchAppForEach(
+        mockResponse(200, {}, loginHtml),
+        mockResponse(302, { 'Set-Cookie': sessionIdCookie }),
+        mockResponse(200)
+      );
+
+      // ---- Act ----
+      const client = new AutoLoginFetchApp(loginUrl, authOptions, {
+        leastIntervalMills: 3000,
+      });
+      client.fetch(mypageUrl);
+
+      // ---- Assertion ----
+      let nth = 0;
+      expect(Utilities.sleep).toHaveBeenNthCalledWith(++nth, 3000);
+      expect(Utilities.sleep).toHaveBeenNthCalledWith(++nth, 3000);
+      expect(Utilities.sleep).toHaveBeenCalledTimes(nth);
     });
 
     it('Logging is enable', () => {
@@ -336,7 +366,7 @@ describe('AutoLoginFetchApp', () => {
 
     // ---- Act ----
     const client = new AutoLoginFetchApp(loginUrl, authOptions);
-    const response = client.fetch(mypageUrl);
+    client.fetch(mypageUrl);
 
     // ---- Assertion ----
     expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(2, `${loginUrl}-request`, {
@@ -363,7 +393,7 @@ describe('AutoLoginFetchApp', () => {
 
     // ---- Act ----
     const client = new AutoLoginFetchApp(loginUrl, authOptions);
-    const response = client.fetch(mypageUrl);
+    client.fetch(mypageUrl);
 
     // ---- Assertion ----
     expect(UrlFetchApp.fetch).toHaveBeenNthCalledWith(2, loginUrl, {

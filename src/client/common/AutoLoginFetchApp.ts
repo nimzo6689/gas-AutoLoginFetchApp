@@ -107,7 +107,7 @@ export default class AutoLoginFetchApp {
       this.cookieJar = new tough.CookieJar();
     }
     // To skip the sleep process before sending the initial request.
-    this.lastRequestTime = new Date().getTime() - this.leastIntervalMills;
+    this.lastRequestTime = Date.now() - this.leastIntervalMills;
   }
 
   public fetch(url: string, params: URLFetchRequestOptions = {}, shouldRetrieveCookie: boolean = true): HTTPResponse {
@@ -130,7 +130,7 @@ export default class AutoLoginFetchApp {
         this.log(`url: ${url}, params: ${JSON.stringify(params)}`);
         this.sleepIfNeeded();
         const response = UrlFetchApp.fetch(url, params);
-        this.lastRequestTime = new Date().getTime();
+        this.lastRequestTime = Date.now();
         this.log(`status: ${response.getResponseCode()}, headers: ${JSON.stringify(response.getAllHeaders())}`);
 
         this.saveCookies(response.getAllHeaders(), url);
@@ -156,7 +156,7 @@ export default class AutoLoginFetchApp {
 
   // This is a measure to avoid overloading the target site with scraping.
   private sleepIfNeeded() {
-    const interval = new Date().getTime() - this.lastRequestTime;
+    const interval = Date.now() - this.lastRequestTime;
     if (interval < this.leastIntervalMills) {
       Utilities.sleep(this.leastIntervalMills - interval);
     }
