@@ -1,21 +1,39 @@
 {
   "name": "gas-auto-login-fetch-app",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "UrlFetchApp with auto-login functionality.",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com:nimzo6689/gas-AutoLoginFetchApp.git"
+  },
+  "author": "nimzo6689",
   "license": "Apache-2.0",
-  "keywords": [],
+  "bugs": {
+    "url": "https://github.com/nimzo6689/gas-AutoLoginFetchApp/issues"
+  },
+  "homepage": "https://github.com/nimzo6689/gas-AutoLoginFetchApp#readme",
+  "keywords": [
+    "Google Apps Script",
+    "gas",
+    "UrlFetchApp",
+    "scraping"
+  ],
   "scripts": {
     "prepare": "husky install",
-    "clean": "rimraf dist",
+    "clean": "rimraf dist && rimraf dist_clasp",
     "lint": "npm run license && eslint --fix --no-error-on-unmatched-pattern src/ test/",
     "bundle": "rollup --no-treeshake -c rollup.config.mjs",
-    "build": "npm run clean && npm run bundle && ncp appsscript.json dist/appsscript.json",
+    "build": "rimraf dist && tsc --declaration --sourceMap",
+    "build:gas": "rimraf dist_clasp && npm run bundle && ncp appsscript.json dist_clasp/appsscript.json",
     "license": "license-check-and-add add -f license-config.json",
     "test": "jest __tests__/ --passWithNoTests --detectOpenHandles",
     "test:coverage": "npm run test -- --coverage",
-    "deploy": "npm run lint && npm run test && npm run build && ncp .clasp-dev.json .clasp.json && clasp push -f",
-    "deploy:prod": "npm run lint && npm run test && npm run build && ncp .clasp-prod.json .clasp.json && clasp push"
+    "deploy": "npm run lint && npm run test && npm run build:gas && ncp .clasp-dev.json .clasp.json && clasp push -f",
+    "deploy:prod": "npm run lint && npm run test && npm run build:gas && ncp .clasp-prod.json .clasp.json && clasp push"
   },
   "engines": {
     "node": ">=12"

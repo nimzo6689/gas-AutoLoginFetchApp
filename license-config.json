@@ -1,15 +1,20 @@
 {
   "ignore": [
+    ".husky",
+    ".vscode",
     ".claspignore",
     ".editorconfig",
     ".eslintignore",
     ".gitignore",
+    ".npmignore",
     ".prettierignore",
     "*.txt",
     "*.md",
     ".github",
     "CONTRIBUTING",
-    "dist"
+    "dist",
+    "dist_clasp",
+    "coverage"
   ],
   "license": "license-header.txt",
   "licenseFormats": {

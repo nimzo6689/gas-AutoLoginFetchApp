@@ -23,9 +23,9 @@ import json from '@rollup/plugin-json';
 import { fileURLToPath } from 'url';
 
 export default {
-  input: ['src/gas/index.ts'],
+  input: ['gas/index.ts'],
   output: {
-    file: 'dist/bundle.js',
+    file: 'dist_clasp/bundle.js',
     format: 'iife',
   },
   plugins: [

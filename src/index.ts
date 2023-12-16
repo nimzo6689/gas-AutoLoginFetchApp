@@ -15,4 +15,4 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-export { default, CustomOptions } from './client/common/AutoLoginFetchApp';
+export { default, CustomOptions } from './client/AutoLoginFetchApp';

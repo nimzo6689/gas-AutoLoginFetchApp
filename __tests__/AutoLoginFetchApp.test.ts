@@ -16,7 +16,7 @@
 import * as fs from 'node:fs';
 import { captor, mock, MockProxy } from 'jest-mock-extended';
 import * as tough from 'tough-cookie';
-import AutoLoginFetchApp from '../src/client/common/AutoLoginFetchApp';
+import AutoLoginFetchApp from '../src/client/AutoLoginFetchApp';
 
 type UrlFetchApp = GoogleAppsScript.URL_Fetch.UrlFetchApp;
 type HTTPResponse = GoogleAppsScript.URL_Fetch.HTTPResponse;
