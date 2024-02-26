@@ -1,5 +1,5 @@
 {
   "editor.formatOnSave": true,
   "prettier.printWidth": 120,
-  "jest.autoRun": {}
+  "jest.runMode": "on-demand"
 }
